@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+//0xCDbCE1D9aB3d95DaC06Dec7C8Da814944fE10F86
 contract ReputationRegistry {
 
     struct AgentProfile {

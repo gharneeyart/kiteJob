@@ -11,12 +11,28 @@ const config: HardhatUserConfig = {
     }
   },
   networks: {
-    kite_testnet: {
+    "kite-testnet": {
       url: "https://rpc-testnet.gokite.ai",
       chainId: 2368,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []
     }
+  },
+  etherscan: {
+    apiKey: {
+      'kite-testnet': 'empty'
+    },
+    customChains: [
+      {
+        network: "kite-testnet",
+        chainId: 2368,
+        urls: {
+          apiURL: "https://testnet.kitescan.ai/api",
+          browserURL: "https://testnet.kitescan.ai"
+        }
+      }
+    ]
   }
 };
 
 export default config;
+
