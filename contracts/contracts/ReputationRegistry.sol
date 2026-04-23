@@ -57,16 +57,20 @@ contract ReputationRegistry {
         emit AgentRegistered(msg.sender, passportDID);
     }
 
-    function recordCompletion(address agent, uint256 amountEarned) external onlyEscrow {
-        require(profiles[agent].registered, "Agent not registered");
+    function recordCompletion(address agent, uint256 amountEarned) external {
+    require(
+        msg.sender == escrowContract || msg.sender == owner,
+        "Not authorized"
+    );
+    require(profiles[agent].registered, "Agent not registered");
 
-        AgentProfile storage profile = profiles[agent];
-        profile.jobsCompleted += 1;
-        profile.totalEarned += amountEarned;
-        profile.reputationScore += 10;
+    AgentProfile storage profile = profiles[agent];
+    profile.jobsCompleted += 1;
+    profile.totalEarned += amountEarned;
+    profile.reputationScore += 10;
 
-        emit ReputationUpdated(agent, profile.reputationScore, profile.jobsCompleted);
-    }
+    emit ReputationUpdated(agent, profile.reputationScore, profile.jobsCompleted);
+}
 
     function getProfile(address agent) external view returns (AgentProfile memory) {
         return profiles[agent];

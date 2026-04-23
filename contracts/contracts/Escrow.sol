@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.30;
 
 interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
     function transfer(address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
+}
+
+interface IReputationRegistry {
+    function recordCompletion(address agent, uint256 amountEarned) external;
 }
 
 contract Escrow {
@@ -24,6 +28,7 @@ contract Escrow {
 
     address public verifier;
     address public owner;
+    address public reputationRegistry;
 
     event EscrowFunded(uint256 indexed jobId, address indexed client, uint256 amount);
     event EscrowReleased(uint256 indexed jobId, address indexed freelancer, uint256 amount);
@@ -39,13 +44,18 @@ contract Escrow {
         _;
     }
 
-    constructor(address _verifier) {
+    constructor(address _verifier, address _reputationRegistry) {
         verifier = _verifier;
         owner = msg.sender;
+        reputationRegistry = _reputationRegistry;
     }
 
     function setVerifier(address _verifier) external onlyOwner {
         verifier = _verifier;
+    }
+
+    function setReputationRegistry(address _registry) external onlyOwner {
+        reputationRegistry = _registry;
     }
 
     function fundEscrow(
@@ -80,6 +90,14 @@ contract Escrow {
 
         bool success = IERC20(record.usdcToken).transfer(record.freelancer, record.amount);
         require(success, "USDC release failed");
+
+        // Update reputation on successful release
+        if (reputationRegistry != address(0)) {
+            IReputationRegistry(reputationRegistry).recordCompletion(
+                record.freelancer,
+                record.amount
+            );
+        }
 
         emit EscrowReleased(jobId, record.freelancer, record.amount);
     }

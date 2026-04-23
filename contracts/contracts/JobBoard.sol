@@ -2,6 +2,12 @@
 pragma solidity ^0.8.30;
 
 contract JobBoard {
+    error NotTheClient();
+    error JobDoesNotExist();
+    error JobNotOpen();
+    error ClientCannotBid();
+    error NotInProgress();
+    error FreelancerNotAssigned();
 
     enum JobStatus { Open, Assigned, Completed, Cancelled }
 
@@ -37,21 +43,16 @@ contract JobBoard {
     event JobCompleted(uint256 indexed jobId);
 
     modifier onlyClient(uint256 jobId) {
-        require(msg.sender == jobs[jobId].client, "Not the job client");
+        require(msg.sender == jobs[jobId].client, NotTheClient());
         _;
     }
 
     modifier jobExists(uint256 jobId) {
-        require(jobId < jobCounter, "Job does not exist");
+        require(jobId < jobCounter, JobDoesNotExist());
         _;
     }
 
-    function postJob(
-        string calldata title,
-        string calldata description,
-        uint256 bounty,
-        uint256 deadline
-    ) external returns (uint256) {
+    function postJob(string calldata title, string calldata description, uint256 bounty, uint256 deadline) external returns (uint256) {
         uint256 jobId = jobCounter++;
 
         jobs[jobId] = Job({
@@ -75,8 +76,8 @@ contract JobBoard {
         uint256 price,
         string calldata proposal
     ) external jobExists(jobId) {
-        require(jobs[jobId].status == JobStatus.Open, "Job not open");
-        require(msg.sender != jobs[jobId].client, "Client cannot bid");
+        require(jobs[jobId].status == JobStatus.Open, JobNotOpen());
+        require(msg.sender != jobs[jobId].client, ClientCannotBid());
 
         bids[jobId].push(Bid({
             bidder: msg.sender,
@@ -92,7 +93,7 @@ contract JobBoard {
         uint256 jobId,
         address freelancer
     ) external jobExists(jobId) onlyClient(jobId) {
-        require(jobs[jobId].status == JobStatus.Open, "Job not open");
+        require(jobs[jobId].status == JobStatus.Open, JobNotOpen());
 
         jobs[jobId].status = JobStatus.Assigned;
         jobs[jobId].assignedTo = freelancer;
@@ -104,8 +105,8 @@ contract JobBoard {
         uint256 jobId,
         string calldata deliverable
     ) external jobExists(jobId) {
-        require(jobs[jobId].assignedTo == msg.sender, "Not assigned freelancer");
-        require(jobs[jobId].status == JobStatus.Assigned, "Job not in progress");
+        require(jobs[jobId].assignedTo == msg.sender, FreelancerNotAssigned());
+        require(jobs[jobId].status == JobStatus.Assigned, NotInProgress());
 
         deliverables[jobId] = deliverable;
 
@@ -113,7 +114,7 @@ contract JobBoard {
     }
 
     function markCompleted(uint256 jobId) external jobExists(jobId) onlyClient(jobId) {
-        require(jobs[jobId].status == JobStatus.Assigned, "Job not in progress");
+        require(jobs[jobId].status == JobStatus.Assigned, NotInProgress());
         jobs[jobId].status = JobStatus.Completed;
         emit JobCompleted(jobId);
     }
