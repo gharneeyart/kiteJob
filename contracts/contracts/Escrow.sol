@@ -1,14 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-//0xd3974a6FE5c8691936C5da8f5897365963E1A6c2
-
-interface IERC20 {
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function transfer(address to, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-}
-
 interface IReputationRegistry {
     function recordCompletion(address agent, uint256 amountEarned) external;
 }
@@ -23,7 +15,6 @@ contract Escrow {
         address freelancer;
         uint256 amount;
         EscrowStatus status;
-        address usdcToken;
     }
 
     mapping(uint256 => EscrowRecord) public escrows;
@@ -60,28 +51,23 @@ contract Escrow {
         reputationRegistry = _registry;
     }
 
+    // Client sends native token directly with this call
     function fundEscrow(
         uint256 jobId,
-        address freelancer,
-        uint256 amount,
-        address usdcToken
-    ) external {
+        address freelancer
+    ) external payable {
         require(escrows[jobId].client == address(0), "Escrow already exists");
-        require(amount > 0, "Amount must be greater than 0");
-
-        bool success = IERC20(usdcToken).transferFrom(msg.sender, address(this), amount);
-        require(success, "USDC transfer failed");
+        require(msg.value > 0, "Must send native token");
 
         escrows[jobId] = EscrowRecord({
             jobId: jobId,
             client: msg.sender,
             freelancer: freelancer,
-            amount: amount,
-            status: EscrowStatus.Funded,
-            usdcToken: usdcToken
+            amount: msg.value,
+            status: EscrowStatus.Funded
         });
 
-        emit EscrowFunded(jobId, msg.sender, amount);
+        emit EscrowFunded(jobId, msg.sender, msg.value);
     }
 
     function releaseEscrow(uint256 jobId) external onlyVerifier {
@@ -90,10 +76,9 @@ contract Escrow {
 
         record.status = EscrowStatus.Released;
 
-        bool success = IERC20(record.usdcToken).transfer(record.freelancer, record.amount);
-        require(success, "USDC release failed");
+        (bool success, ) = payable(record.freelancer).call{value: record.amount}("");
+        require(success, "Native token transfer failed");
 
-        // Update reputation on successful release
         if (reputationRegistry != address(0)) {
             IReputationRegistry(reputationRegistry).recordCompletion(
                 record.freelancer,
@@ -111,8 +96,8 @@ contract Escrow {
 
         record.status = EscrowStatus.Refunded;
 
-        bool success = IERC20(record.usdcToken).transfer(record.client, record.amount);
-        require(success, "USDC refund failed");
+        (bool success, ) = payable(record.client).call{value: record.amount}("");
+        require(success, "Native token refund failed");
 
         emit EscrowRefunded(jobId, record.client, record.amount);
     }
@@ -120,4 +105,7 @@ contract Escrow {
     function getEscrow(uint256 jobId) external view returns (EscrowRecord memory) {
         return escrows[jobId];
     }
+
+    // Allow contract to receive native token
+    receive() external payable {}
 }

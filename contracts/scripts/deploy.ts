@@ -1,60 +1,42 @@
 import { ethers } from "hardhat";
-import * as fs from "fs";
-import * as path from "path";
 
 async function main() {
-  const [deployer] = await ethers.getSigners();
-  console.log("Deploying with address:", deployer.address);
+  const [signer] = await ethers.getSigners();
+  console.log("Caller:", signer.address);
 
-  const balance = await ethers.provider.getBalance(deployer.address);
-  console.log("Balance:", ethers.formatEther(balance), "ETH\n");
+  const escrowAddress = "0xA41Cb0ab3a02f5D02CC19B3aa325D55CFAd646F8";
+  const reputationRegistryAddress = "0xCDbCE1D9aB3d95DaC06Dec7C8Da814944fE10F86";
 
-  // 1. Deploy ReputationRegistry (no dependencies)
-  console.log("Deploying ReputationRegistry...");
-  const ReputationRegistry = await ethers.getContractFactory("ReputationRegistry");
-  const registry = await ReputationRegistry.deploy();
-  await registry.waitForDeployment();
-  const registryAddress = await registry.getAddress();
-  console.log("ReputationRegistry deployed to:", registryAddress);
+  if (!escrowAddress) {
+    throw new Error("❌ ESCROW_ADDRESS not set in .env");
+  }
 
-  // 2. Deploy JobBoard (no dependencies)
-  console.log("\nDeploying JobBoard...");
-  const JobBoard = await ethers.getContractFactory("JobBoard");
-  const jobBoard = await JobBoard.deploy();
-  await jobBoard.waitForDeployment();
-  const jobBoardAddress = await jobBoard.getAddress();
-  console.log("JobBoard deployed to:", jobBoardAddress);
+  const escrow = await ethers.getContractAt(
+    "Escrow",
+    escrowAddress,
+    signer
+  );
 
-  // 3. Deploy Escrow (needs registry address + verifier)
-  // For now verifier = deployer, we'll update it when verifier agent is ready
-  console.log("\nDeploying Escrow...");
-  const Escrow = await ethers.getContractFactory("Escrow");
-  const escrow = await Escrow.deploy(deployer.address, registryAddress);
-  await escrow.waitForDeployment();
-  const escrowAddress = await escrow.getAddress();
-  console.log("Escrow deployed to:", escrowAddress);
+  const currentVerifier = await escrow.verifier();
+  console.log("Current verifier:", currentVerifier);
 
-  // 4. Wire up: tell ReputationRegistry which Escrow can call it
-  console.log("\nWiring contracts together...");
+  const newVerifier = "0xa57686f076BEC43a7F0031aE58325C9ce8187a85";
+
+  const tx = await escrow.setVerifier(newVerifier);
+  await tx.wait();
+
+  console.log("✅ Verifier updated to:", newVerifier);
+
+  const registry = await ethers.getContractAt(
+    "ReputationRegistry",
+    reputationRegistryAddress,
+    signer
+  );
+
   const setEscrowTx = await registry.setEscrowContract(escrowAddress);
   await setEscrowTx.wait();
-  console.log("ReputationRegistry now accepts calls from Escrow");
 
-  // 5. Save addresses to a file so agents + frontend can read them
-  const addresses = {
-    network: (await ethers.provider.getNetwork()).name,
-    chainId: (await ethers.provider.getNetwork()).chainId.toString(),
-    deployer: deployer.address,
-    JobBoard: jobBoardAddress,
-    Escrow: escrowAddress,
-    ReputationRegistry: registryAddress,
-    deployedAt: new Date().toISOString()
-  };
-
-  const outputPath = path.join(__dirname, "../deployments.json");
-  fs.writeFileSync(outputPath, JSON.stringify(addresses, null, 2));
-  console.log("\nAddresses saved to deployments.json");
-  console.log(JSON.stringify(addresses, null, 2));
+  console.log("✅ ReputationRegistry escrowContract set to:", escrowAddress);
 }
 
 main().catch((err) => {
